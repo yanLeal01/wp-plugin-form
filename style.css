@@ -9,7 +9,7 @@ form.cuestionario label {
 }
 
 form.cuestionario .form-input {
-    padding: 1em;
+    padding: .5rem;
 }
 
 form.cuestionario .form-input input[type='text'],
@@ -17,6 +17,43 @@ form.cuestionario .form-input input[type='email'],
 form.cuestionario textarea {
     display: block;
     width: 100%;
+}
+
+form.cuestionario .form-check-inline {
+    display: -ms-inline-flexbox;
+    display: inline-flex;
+    align-items: center;
+    padding-left: 0;
+    margin-right: .75rem;
+}
+
+form.cuestionario .form-check-input {
+    position: static;
+    margin-top: 0;
+    margin-right: .3125rem;
+    margin-left: 0;
+}
+
+form.cuestionario .form-group {
+    margin-bottom: 1rem;
+}
+
+form.cuestionario .form-control {
+    display: block;
+    width: 100%;
+    padding: 1.2rem 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+}
+
+form.cuestionario .label {
+    display: inline;
+    margin-bottom: .5rem;
 }
 
 p.exito {
