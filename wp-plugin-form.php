@@ -37,33 +37,64 @@ function WP_registros_init()
         UNIQUE (id)
         ) $charset_collate";
     include_once ABSPATH . 'wp-admin/includes/upgrade.php';
-    dbDelta( $query );
+    dbDelta($query);
 }
 
- // Definir el shortcode que pinta el formulario
- add_shortcode( 'wp-plugin-form', 'WP_Plugin_form');
+
+// Definir el shortcode que pinta el formulario
+add_shortcode('wp-plugin-form', 'WP_Plugin_form');
 
 /** Crea el shortcode
- * 
+ *
  * @return void
  */
+function sendRequest($ruta, $data, $method, $auth, $token)
+{
+    $url = 'https://recuperemosmexico.org/contmx/' . $ruta;
 
- function WP_Plugin_form()
- {
-     global $wpdb;
-     
-     if (!empty($_POST)
-        AND $_POST['txtNombre'] != ''
-        AND is_email($_POST['txtEmail'])
-        AND $_POST['txtAp_pat'] != ''
-        AND $_POST['txtAp_mat'] != ''
-        AND $_POST['txtSeccion'] != ''
-        AND $_POST['txtCel'] != ''
-     ){
+    // use key 'http' even if you send the request to https://...
+    if ($auth) {
+        $options = array(
+            'http' => array(
+                'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+                'method' => $method,
+                'content' => http_build_query($data)
+            )
+        );
+    } else {
+        $options = array(
+            'http' => array(
+                'header' => array("Content-type: application/x-www-form-urlencoded", "Authorization: Bearer " . $token),
+                'method' => $method,
+                'content' => http_build_query($data)
+            )
+        );
+    }
+    $context = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+    if ($result === FALSE) { /* Handle error */
+    }
+    var_dump($result);
+    if ($auth)
+        return json_decode($result)->token;
+}
+
+function WP_Plugin_form()
+{
+    global $wpdb;
+
+    if (!empty($_POST)
+        and $_POST['txtNombre'] != ''
+        and is_email($_POST['txtEmail'])
+        and $_POST['txtAp_pat'] != ''
+        and $_POST['txtAp_mat'] != ''
+        and $_POST['txtSeccion'] != ''
+        and $_POST['txtCel'] != ''
+    ) {
         $tabla_registros = $wpdb->prefix . 'registros';
         /*print_r($_POST);*/
-        $simpatizante = (int)$_POST['chkSimpatizante'];
-        $candidato = (int)$_POST['chkCandidato'];
+        $simpatizante = $_POST['chkSimpatizante'];
+        $candidato = $_POST['chkCandidato'];
         $patrocinador = (int)$_POST['chkPatrocinador'];
         $activista = (int)$_POST['chkActivista'];
         $equipo = sanitize_text_field($_POST['txtEquipo']);
@@ -83,7 +114,7 @@ function WP_registros_init()
         $created_at = date('Y-m-d H:i:s');
 
         $wpdb->insert(
-            $tabla_registros, 
+            $tabla_registros,
             array(
                 'simpatizante' => $simpatizante,
                 'candidato' => $candidato,
@@ -100,81 +131,122 @@ function WP_registros_init()
                 'edoVives' => $edo_vives,
                 'email' => $correo,
                 'celular' => $celular,
-                'contactar' => $autorizacion,  
+                'contactar' => $autorizacion,
                 'asistirEventos' => $eventos,
                 'comentario' => $comentario,
-                'created_at' => $created_at          
+                'created_at' => $created_at
             )
         );
+        $data = array(
+            'nombre' => $nombre,
+            'aPaterno' => $ap_pat,
+            'aMaterno' => $ap_mat,
+            'celular' => $celular,
+            'seccion' => $seccion,
+            'email' => $correo,
+            'padre' => "5eed3acfbb881e3c1c7eb171",
+            'equipo' => $equipo,
+            'propuesta' => $comentario,
+            'imagen' => "",
+            'fNacimiento' => array(
+                'dia' => $dia_cumple,
+                'mes' => array(
+                    'idMes' => $mes_cumple,
+                    'mes' => ""
+                ),
+            ),
+            'estadoVota' => array(
+                'idEstado' => "",
+                'estado' => $edo_votas
+            ),
+            'estadoVive' => array(
+                'idEstado' => "",
+                'estado' => $edo_vives
+            ),
+            'tipoAyuda' => array(
+                'miDerecho' => $simpatizante,
+                'candidato' => $candidato,
+                'patrocinador' => $patrocinador,
+                'activista' => $activista,
+            ),
+            'contactar' => $autorizacion,
+            'asistir' => $eventos,
+        );
+        sendRequest("propuesta", $data, "POST", false, $_SESSION["token"]);
+
+    } else {
+        $data = array('site' => 'ciudadanosxmex', 'log' => 'c35d1d1n45x');
+        $_SESSION["token"] = sendRequest("login", $data, "POST", true, "");
     }
- 
+
     // Carga esta hoja de estilo para dar formato al formulatio
-    wp_enqueue_style('css_registros', plugins_url('style.css',__FILE__));
+    wp_enqueue_style('css_registros', plugins_url('style.css', __FILE__));
     ob_start();
     ?>
-    
+
     <form action="<?php get_the_permalink(); ?>" method="post" id="form_registros" class="cuestionario">
-    <?php wp_nonce_field('graba_registros', 'registros_nonce'); ?>
-        <h3>Únete y participa</h3>
-        <h4>¿Cómo te gustaría ayudar?</h4>
-        <h5>* Puedes participar en una o más categorías</h5>
-        <div class="form-group">
-            <div class="form-check-inline">
-                <input class="form-check-input" type="checkbox" id="chkSimpatizante" name="chkSimpatizante" value="1" checked>
-                <label class="form-check-label" for="chkSimpatizante">Simpatizante</label>
-            </div>    
-            <div class="form-check-inline">
-                <input class="form-check-input" type="checkbox" id="chkCandidato" name="chkCandidato" value="1">
-                <label class="form-check-label" for="chkCandidato">Aspirante a candidato</label>
-            </div>
-            <div class="form-check-inline">
-                <input class="form-check-input" type="checkbox" id="chkPatrocinador" name="chkPatrocinador" value="1">
-                <label class="form-check-label" for="chkPatrocinador">Patrocinador</label>
-            </div>
-            <div class="form-check-inline">
-                <input class="form-check-input" type="checkbox" id="chkActivista" name="chkActivista" value="1" onchange="javascript:showContent()">
-                <label class="form-check-label" for="chkActivista">Activista</label>
-            </div>    
-                <script type="text/javascript">
-                    function showContent() {
-                        element = document.getElementById("container-activista");
-                        check = document.getElementById("chkActivista");
-                        if (check.checked) {
-                            element.style.display = 'block';
-                        } else {
-                            element.style.display = 'none';
-                        }
+        <?php wp_nonce_field('graba_registros', 'registros_nonce'); ?>
+        <div class="form-input">
+            <h4>Contigo somos más</h4>
+            <h3>Únete y participa</h3>
+            <h5>Puedes participar en una o más categorías</h5>
+            <h5>¿Cómo te gustaría ayudar?</h5>
+            <input class="form-check-input" type="checkbox" id="chkSimpatizante" name="chkSimpatizante" value="1"
+                   checked>
+            <label class="form-check-label" for="chkSimpatizante">Simpatizante</label>
+            <input class="form-check-input" type="checkbox" id="chkCandidato" name="chkCandidato" value="1">
+            <label class="form-check-label" for="chkCandidato">Aspirante a candidato</label>
+            <input class="form-check-input" type="checkbox" id="chkPatrocinador" name="chkPatrocinador" value="1">
+            <label class="form-check-label" for="chkPatrocinador">Patrocinador</label>
+            <input class="form-check-input" type="checkbox" id="chkActivista" name="chkActivista" value="1"
+                   onchange="javascript:showContent()">
+            <label class="form-check-label" for="chkActivista">Activista</label>
+            <script type="text/javascript">
+                function showContent() {
+                    element = document.getElementById("container-activista");
+                    check = document.getElementById("chkActivista");
+                    if (check.checked) {
+                        element.style.display = 'block';
+                    } else {
+                        element.style.display = 'none';
                     }
-                </script>
-                <div id="container-activista" style="display: none;">
-                    <h5>Si eres activista podrás invitar amigos ¿Cómo te gustaría llamar a tu equipo?</h5>
-                    <input class="form-control" type="text" name="txtEquipo" id="txtEquipo" placeholder="Nombre de tu equipo">
-                        <label>Carga el logo de tu equipo</label>
-                        <div class="row">
-                            <div class="col-lg-6 col-md-6 col-sm-12 me-trading-form-box">
-                                <input type="file" id="iLoad" accept="image/*"/>
-                            </div>
-                            <div class="col-lg-6 col-md-6 col-sm-12 me-trading-form-box"  >
-                                <img style="border-radius: 50%;" id="img" height="150">
-                            </div>
-                        </div>
+                }
+            </script>
+            <div id="container-activista" style="display: none;">
+                <h5>Si eres activista podrás invitar amigos ¿Cómo te gustaría llamar a tu equipo?</h5>
+                <input type="text" name="txtEquipo" id="txtEquipo" placeholder="Nombre de tu equipo">
+                <!-- LOGO -->
+                <div class="row">
+                    <div class="col-lg-12 col-md-12 col-sm-12 me-trading-form-box">
+                        <label><strong>Carga el logo de tu equipo</strong></label>
+                    </div>
                 </div>
+                <div class="row">
+                    <div class="col-lg-6 col-md-6 col-sm-12 me-trading-form-box">
+                        <input type="file" id="iLoad" accept="image/*"/>
+                    </div>
+                    <div class="col-lg-6 col-md-6 col-sm-12 me-trading-form-box">
+                        <img style="border-radius: 50%;" id="img" height="150">
+                    </div>
+                </div>
+                <br>
+            </div>
         </div>
-        <div class="form-group">
+        <div class="form-input">
             <label for="txtNombre">Nombre</label>
-            <input class="form-control" type="text" name="txtNombre" id="txtNombre" placeholder="Nombre*" required>
+            <input type="text" name="txtNombre" id="txtNombre" placeholder="Nombre *" required>
         </div>
-        <div class="form-group"> 
+        <div class="form-input">
             <label for="txtAp_pat">Apellido Paterno</label>
-            <input class="form-control" type="text" name="txtAp_pat" id="txtAp_pat" placeholder="Apellido Paterno *" required>
+            <input type="text" name="txtAp_pat" id="txtAp_pat" placeholder="Apellido Paterno *" required>
         </div>
-        <div class="form-group">
+        <div class="form-input">
             <label for="txtAp_mat">Apellido Materno</label>
-            <input class="form-control" type="text" name="txtAp_mat" id="txtAp_mat" placeholder="Apellido Materno *" required>
+            <input type="text" name="txtAp_mat" id="txtAp_mat" placeholder="Apellido Materno *" required>
         </div>
-        <div class="form-group">
-            <label for="cmbDia_cumple">Día de cumpleaños*</label>
-            <select class="form-control" id="cmbDia_cumple" name="cmbDia_cumple" required>
+        <div class="form-input">
+            <input type="text" placeholder="Día de cumpleaños *" disabled>
+            <select id="cmbDia_cumple" name="cmbDia_cumple" required>
                 <option selected hidden>Seleccionar</option>
                 <option value="1">1</option>
                 <option value="2">2</option>
@@ -209,9 +281,9 @@ function WP_registros_init()
                 <option value="31">31</option>
             </select>
         </div>
-        <div class="form-group"> 
-            <label for="cmbMes_cumple">Mes de cumpleaños*</label>
-            <select class="form-control" id="cmbMes_cumple" name="cmbMes_cumple" required>
+        <div class="form-input">
+            <input type="text" placeholder="Mes de Cumpleaños *" disabled>
+            <select id="cmbMes_cumple" name="cmbMes_cumple" required>
                 <option selected hidden>Seleccionar</option>
                 <option value="01">Enero</option>
                 <option value="02">Febrero</option>
@@ -227,61 +299,51 @@ function WP_registros_init()
                 <option value="12">Diciembre</option>
             </select>
         </div>
-        <div class="form-group">  
-            <label for="cmbEdo_votas">Estado donde votas *</label>      
-            <select class="form-control" id="cmbEdo_votas" name="cmbEdo_votas" required>
+        <div class="form-input">
+            <input type="text" placeholder="Estado donde votas *" disabled>
+            <select id="cmbEdo_votas" name="cmbEdo_votas" required>
                 <option selected hidden>Selecionar</option>
                 <option value="1">Aguascalientes</option>
                 <option value="2">Baja California</option>
                 <option value="3">Baja California Sur</option>
                 <option value="4">Campeche</option>
                 <option value="5">CDMX</option>
-                                            <option value="6">Chiapas</option>
-                                            <option value="7">Chihuahua</option>
-                                            <option value="8">Coahuila</option>
-                                            <option value="9">Colima</option>
-                                            <option value="10">Durango</option>
-                                            <option value="11">Estado de México</option>
-                                            <option value="12">Guanajuato</option>
-                                            <option value="13">Guerrero</option>
-                                            <option value="14">Hidalgo</option>
-                                            <option value="15">Jalisco</option>
-                                            <option value="16">Michoacán</option>
-                                            <option value="17">Morelos</option>
-                                            <option value="18">Nayarit</option>
-                                            <option value="19">Nuevo León</option>
-                                            <option value="20">Oaxaca</option>
-                                            <option value="21">Puebla</option>
-                                            <option value="22">Querétaro</option>
-                                            <option value="23">Quintana Roo</option>
-                                            <option value="24">San Luis Potosí</option>
-                                            <option value="25">Sinaloa</option>
-                                            <option value="26">Sonora</option>
-                                            <option value="27">Tabasco</option>
-                                            <option value="28">Tamaulipas</option>
-                                            <option value="29">Tlaxcala</option>
-                                            <option value="30">Veracruz</option>
-                                            <option value="31">Yucatán</option>
-                                            <option value="32">Zacatecas</option>
+                <option value="6">Chiapas</option>
+                <option value="7">Chihuahua</option>
+                <option value="8">Coahuila</option>
+                <option value="9">Colima</option>
+                <option value="10">Durango</option>
+                <option value="11">Estado de México</option>
+                <option value="12">Guanajuato</option>
+                <option value="13">Guerrero</option>
+                <option value="14">Hidalgo</option>
+                <option value="15">Jalisco</option>
+                <option value="16">Michoacán</option>
+                <option value="17">Morelos</option>
+                <option value="18">Nayarit</option>
+                <option value="19">Nuevo León</option>
+                <option value="20">Oaxaca</option>
+                <option value="21">Puebla</option>
+                <option value="22">Querétaro</option>
+                <option value="23">Quintana Roo</option>
+                <option value="24">San Luis Potosí</option>
+                <option value="25">Sinaloa</option>
+                <option value="26">Sonora</option>
+                <option value="27">Tabasco</option>
+                <option value="28">Tamaulipas</option>
+                <option value="29">Tlaxcala</option>
+                <option value="30">Veracruz</option>
+                <option value="31">Yucatán</option>
+                <option value="32">Zacatecas</option>
             </select>
         </div>
-        <div class="form-group"> 
+        <div class="form-input">
             <label for="txtSeccion">Sección donde votas</label>
-            <input class="form-control" type="text" name="txtSeccion" id="txtSeccion" placeholder="Sección donde votas*" required onclick="mostrarCredencial()">
+            <input type="text" name="txtSeccion" id="txtSeccion" placeholder="Sección donde votas*" required>
         </div>
-        <div class="row" id="credencial" style="display:none;">
-            <img src="images/ine.jpg" alt="credencial" class="img-fluid"/>
-            <h5> Puedes obtener tu sección de la credencial del INE.</h5>
-        </div>
-        <script type="text/javascript">
-            function mostrarCredencial() {
-                element = document.getElementById("credencial");
-                element.style.display = 'block';
-            }
-        </script>
-        <div class="form-group"> 
-            <label for="cmbEdo_vives">Estado donde vives *</label>
-            <select class="form-control" id="cmbEdo_vives" name="cmbEdo_vives" required>
+        <div class="form-input">
+            <input type="text" placeholder="Estado donde vives *" disabled>
+            <select id="cmbEdo_vives" name="cmbEdo_vives" required>
                 <option selected hidden>Seleccionar</option>
                 <option value="1">Aguascalientes</option>
                 <option value="2">Baja California</option>
@@ -298,100 +360,59 @@ function WP_registros_init()
                 <option value="13">Guerrero</option>
                 <option value="14">Hidalgo</option>
                 <option value="15">Jalisco</option>
-                                            <option value="16">Michoacán</option>
-                                            <option value="17">Morelos</option>
-                                            <option value="18">Nayarit</option>
-                                            <option value="19">Nuevo León</option>
-                                            <option value="20">Oaxaca</option>
-                                            <option value="21">Puebla</option>
-                                            <option value="22">Querétaro</option>
-                                            <option value="23">Quintana Roo</option>
-                                            <option value="24">San Luis Potosí</option>
-                                            <option value="25">Sinaloa</option>
-                                            <option value="26">Sonora</option>
-                                            <option value="27">Tabasco</option>
-                                            <option value="28">Tamaulipas</option>
-                                            <option value="29">Tlaxcala</option>
-                                            <option value="30">Veracruz</option>
-                                            <option value="31">Yucatán</option>
-                                            <option value="32">Zacatecas</option>
+                <option value="16">Michoacán</option>
+                <option value="17">Morelos</option>
+                <option value="18">Nayarit</option>
+                <option value="19">Nuevo León</option>
+                <option value="20">Oaxaca</option>
+                <option value="21">Puebla</option>
+                <option value="22">Querétaro</option>
+                <option value="23">Quintana Roo</option>
+                <option value="24">San Luis Potosí</option>
+                <option value="25">Sinaloa</option>
+                <option value="26">Sonora</option>
+                <option value="27">Tabasco</option>
+                <option value="28">Tamaulipas</option>
+                <option value="29">Tlaxcala</option>
+                <option value="30">Veracruz</option>
+                <option value="31">Yucatán</option>
+                <option value="32">Zacatecas</option>
             </select>
         </div>
-        <div class="form-group">   
+        <div class="form-input">
             <label for="txtEmail">Email</label>
-            <input class="form-control" type="email" name="txtEmail" id="txtEmail" placeholder="Email">
+            <input type="email" name="txtEmail" id="txtEmail" placeholder="Email">
         </div>
-        <div class="form-group">   
-            <label for="txtCel">Celular</label>                 
-            <input class="form-control" type="tel" name="txtCel" id="txtCel" placeholder="Celular (10 dígitos) *" maxlength="10" pattern="[0-9]{10}" required>
+        <div class="form-input">
+            <label for="txtCel">Celular</label>
+            <input type="tel" name="txtCel" id="txtCel" placeholder="Celular (10 dígitos) *" maxlength="10"
+                   pattern="[0-9]{10}" required>
         </div>
-        <div class="form-group">                      
-            <label for="cmbAutorizacion">¿Te podemos contactar? *</label>
-            <select  class="form-control" id="cmbAutorizacion" name="cmbAutorizacion" required>
+        <div class="form-input">
+            <label><strong>¿Te podemos contactar? *</strong></label>
+            <select id="cmbAutorizacion" name="cmbAutorizacion" required>
                 <option selected hidden>Seleccionar</option>
                 <option value="1">Si</option>
                 <option value="2">No</option>
             </select>
         </div>
-        <div class="form-group">                      
-            <label for="cmbEventos">¿Te gustaría asistir a eventos de Recuperemos México en tu distrito?*</label>
-            <select class="form-control" id="cmbEventos" name="cmbEventos" required>
+        <div class="form-input">
+            <label><strong>¿Te gustaría asistir a eventos de Recuperemos México en tu distrito?*</strong></label>
+            <select id="cmbEventos" name="cmbEventos" required>
                 <option selected hidden>Seleccionar</option>
                 <option value="1">Si</option>
                 <option value="2">No</option>
             </select>
         </div>
-        <div class="form-group">                      
-            <label for="txaComentario">¡Nos interesa muchísimo saber lo que piensas! ¿Quisieras compartirnos algún comentario o idea?</label>
-            <textarea class="form-control" id="txaComentario" name="txaComentario" rows="3" placeholder="Comentario, idea, propuesta..."></textarea>
+        <div class="form-input">
+            <label><strong>¡Nos interesa muchísimo saber lo que piensas! </strong>¿Quisieras
+                compartirnos algún comentario o idea?</label>
+            <textarea class="form-control" id="txaComentario" name="txaComentario" rows="3"
+                      placeholder="Comentario, idea, propuesta..."></textarea>
         </div>
-        <div class="form-group"> 
-            <input type="submit" value="Enviar">
-        </div>
+        <input id="bEnviar" type="submit" onclick="sendPropuesta()" value="ENVIAR">
     </form>
 
     <?php
     return ob_get_clean();
 }
-
-add_action("admin_menu", "WP_registros_menu");
-
-/** Agrega el menu del plugin al formulario de wordpress
- * 
- * @return void
- */
-
- function WP_registros_menu()
- {
-    add_menu_page("Ciudadanos registrados", "Ciudadanos", "manage_options", 
-    "WP_registros_menu", "WP_registros_admin", "dashicons-feedback", 75);
-}
-
-function WP_registros_admin()
-{
-    global $wpdb;
-
-    $tabla_registros = $wpdb->prefix . 'registros';
-    $registros = $wpdb->get_results("Select * from $tabla_registros");
-    echo '<div class="warp"><h1>Listado de ciudadanos registrados</h1>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-    echo '<thead> <tr> <th width="10%">Nombre</th> <th width="10%">Apellido Paterno</th>';
-    echo '<th width="10%">Apellido Materno</th> <th width="10%">Celular</th> <th width="20%">Correo</th>';
-    echo '<th width="10%">Estado en donde votas</th> <th width="10%">No. Sección</th>';
-    echo '<th width="20%">Comentario</th> </tr> </thead> ';
-    echo '<tbody id="the-list">';
-    foreach ($registros as $registro){
-        $nombre= esc_textarea( $registro->nombre );
-        $ape_pat= esc_textarea( $registro->apePat );
-        $ape_mat= esc_textarea( $registro->apeMat );
-        $celular= esc_textarea( $registro->celular );
-        $correo= esc_textarea( $registro->email );
-        $edoVotas= (int)$registro->edoVotas;
-        $seccion= (int)$registro->seccionVotas;
-        $comentario= esc_textarea( $registro->comentario );
-        echo "<tr><td>$nombre</td><td>$ape_pat</td><td>$ape_mat</td><td>$celular</td><td>$correo</td>";
-        echo "<td>$edoVotas</td><td>$seccion</td><td>$comentario</td></tr>";
-    }
-    echo '</tbody></table></div>';
-}
-
