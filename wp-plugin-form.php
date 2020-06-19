@@ -395,3 +395,5 @@ function WP_registros_admin()
     echo '</tbody></table></div>';
 }
 
+
+
